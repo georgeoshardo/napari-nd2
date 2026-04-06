@@ -12,5 +12,6 @@ calibration, and time metadata are mapped into napari layer metadata.
 Use `pixi` for the local environment:
 
 ```bash
+pixi run napari
 pixi run -e test test
 ```

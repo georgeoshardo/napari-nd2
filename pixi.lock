@@ -1756,7 +1756,7 @@ packages:
 - pypi: ./
   name: napari-nd2
   version: 0.1.0
-  sha256: 35b5545a5b65d17d47b3d6416bbf2a83ab8d6863baa4a969e21c458754678c46
+  sha256: cb46c09aa15aedce675806598738d3d1e19916433d3918628e305a787f357196
   requires_dist:
   - dask[array]
   - nd2>=0.11

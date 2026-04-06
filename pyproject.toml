@@ -34,14 +34,19 @@ platforms = ["osx-arm64"]
 
 [tool.pixi.dependencies]
 python = "3.12.*"
-pyqt6 = "*"
 
 [tool.pixi.pypi-dependencies]
 napari_nd2 = { path = ".", editable = true }
-napari = ">=0.7,<0.8"
 
 [tool.pixi.environments]
-test = ["test"]
+default = { features = ["dev"], solve-group = "default" }
+test = { features = ["dev", "test"], solve-group = "default" }
+
+[tool.pixi.feature.dev.dependencies]
+pyqt6 = "*"
+
+[tool.pixi.feature.dev.pypi-dependencies]
+napari = ">=0.7,<0.8"
 
 [tool.pixi.feature.test.tasks]
 test = "pytest"

@@ -59,7 +59,7 @@ def test_reader_uses_to_dask_for_lazy_loading(monkeypatch, tmp_path):
             assert orient == "list"
             return {"Time [s]": [0.25, 1.25]}
 
-    monkeypatch.setattr("napari_nd2._reader.nd2.ND2File", FakeND2File)
+    monkeypatch.setattr("napari_nd2._reader._nd2", lambda: SimpleNamespace(ND2File=FakeND2File))
 
     result = read_nd2(tmp_path / "lazy.nd2")
     assert len(result) == 1
@@ -119,7 +119,7 @@ def test_reader_output_is_accepted_by_napari(monkeypatch, tmp_path):
             assert orient == "list"
             return {"Time [s]": [0.25, 1.25], "T Index": [0, 1]}
 
-    monkeypatch.setattr("napari_nd2._reader.nd2.ND2File", FakeND2File)
+    monkeypatch.setattr("napari_nd2._reader._nd2", lambda: SimpleNamespace(ND2File=FakeND2File))
 
     data, add_kwargs, _ = read_nd2(tmp_path / "viewer.nd2")[0]
     viewer = ViewerModel()

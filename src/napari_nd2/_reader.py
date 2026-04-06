@@ -1,7 +1,7 @@
 from collections.abc import Sequence
+from importlib import import_module
 from pathlib import Path
 
-import nd2
 import numpy as np
 
 
@@ -36,6 +36,7 @@ def read_nd2(path):
 
 
 def _read_single_file(path, *, multiple_files):
+    nd2 = _nd2()
     with nd2.ND2File(path) as nd2_file:
         data = nd2_file.to_dask()
         axes = tuple(nd2_file.sizes.keys())
@@ -73,6 +74,10 @@ def _coerce_paths(path):
     if isinstance(path, Sequence):
         return [Path(item) for item in path]
     return [Path(path)]
+
+
+def _nd2():
+    return import_module("nd2")
 
 
 def _channel_metadata(nd2_file):
