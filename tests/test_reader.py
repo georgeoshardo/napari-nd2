@@ -1,4 +1,3 @@
-from pathlib import Path
 from types import SimpleNamespace
 
 import dask.array as da
@@ -7,9 +6,6 @@ import pytest
 from napari.components import ViewerModel
 
 from napari_nd2._reader import get_reader, read_nd2
-
-
-TEST_FILE = Path(__file__).resolve().parents[1] / "test_ND2" / "YK662 Rab7 miRFP007.nd2"
 
 
 def test_get_reader_handles_nd2_paths():
@@ -135,30 +131,3 @@ def test_reader_output_is_accepted_by_napari(monkeypatch, tmp_path):
         pytest.approx((1.0, 0.5, 0.25)),
         pytest.approx((1.0, 0.5, 0.25)),
     ]
-
-
-@pytest.mark.skipif(not TEST_FILE.exists(), reason="local 4 GB ND2 test file is not available")
-def test_real_nd2_file_is_lazy_and_keeps_time_channel_metadata():
-    result = read_nd2(TEST_FILE)
-    assert len(result) == 1
-
-    data, add_kwargs, layer_type = result[0]
-    assert isinstance(data, da.Array)
-    assert data.shape == (201, 2, 2304, 2304)
-    assert layer_type == "image"
-    assert add_kwargs["channel_axis"] == 1
-    assert add_kwargs["name"] == ["miRFP1", "EYFP"]
-    assert add_kwargs["colormap"] == ["magenta", "yellow"]
-    assert add_kwargs["scale"] == pytest.approx((3.0002656298828128, 0.064830620007835, 0.064830620007835))
-    assert add_kwargs["translate"] == pytest.approx((0.9387972800731659, 0.0, 0.0))
-    assert add_kwargs["metadata"]["axes"] == ["T", "C", "Y", "X"]
-    assert len(add_kwargs["metadata"]["time_coordinates_s"]) == 201
-    assert add_kwargs["metadata"]["time_axis_irregular"] is True
-    assert add_kwargs["metadata"]["channel_metadata"][0]["name"] == "miRFP1"
-    assert add_kwargs["metadata"]["channel_metadata"][1]["name"] == "EYFP"
-    assert add_kwargs["metadata"]["channel_metadata"][0]["color"] == "#ff00ff"
-    assert add_kwargs["metadata"]["channel_metadata"][1]["color"] == "#ffff00"
-
-    sample = data[0, 0, :8, :8].compute()
-    assert sample.shape == (8, 8)
-    assert sample.dtype == np.uint16

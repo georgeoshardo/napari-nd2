@@ -14,7 +14,3 @@ Use `pixi` for the local environment:
 ```bash
 pixi run -e test test
 ```
-
-The repository includes optional tests against
-`test_ND2/YK662 Rab7 miRFP007.nd2`. That file is ignored in git because it is
-several gigabytes, so those tests only run when the file is present locally.
