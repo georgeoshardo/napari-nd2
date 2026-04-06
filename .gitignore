@@ -179,3 +179,5 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+.pixi/
+test_ND2/YK662 Rab7 miRFP007.nd2

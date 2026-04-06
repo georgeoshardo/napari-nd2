@@ -1,0 +1,13 @@
+name: napari-nd2
+display_name: napari ND2
+schema_version: 0.2.1
+contributions:
+  commands:
+    - id: napari-nd2.get_reader
+      title: Read ND2 files
+      python_name: napari_nd2._reader:get_reader
+  readers:
+    - command: napari-nd2.get_reader
+      filename_patterns:
+        - "*.nd2"
+      accepts_directories: false
