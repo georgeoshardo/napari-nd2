@@ -37,6 +37,7 @@ python = "3.12.*"
 
 [tool.pixi.pypi-dependencies]
 napari_nd2 = { path = ".", editable = true }
+napari = ">=0.7,<0.8"
 
 [tool.pixi.environments]
 test = ["test"]
@@ -46,7 +47,6 @@ test = "pytest"
 
 [dependency-groups]
 test = [
-    "napari",
     "npe2",
     "pytest",
 ]
