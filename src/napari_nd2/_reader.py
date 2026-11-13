@@ -69,9 +69,9 @@ def read_nd2(path):
 def _read_single_file(path, *, multiple_files):
     nd2 = _nd2()
     with nd2.ND2File(path) as nd2_file:
-        # dask-backed; its reads reopen the file after this block closes it
-        xarr = nd2_file.to_xarray(delayed=True)
-        axes = tuple(str(axis) for axis in xarr.dims)
+        # read frame by frame; the reads reopen the file after this block closes it
+        data = nd2_file.to_dask()
+        axes = tuple(str(axis) for axis in nd2_file.sizes)  # the order of data's axes
         channel_axis = axes.index("C") if "C" in axes else None
         # a colour camera's red, green and blue: the last axis, shown as RGB
         rgb = axes[-1] == "S"
@@ -91,14 +91,12 @@ def _read_single_file(path, *, multiple_files):
         )
         metadata[METADATA_KEY] = {
             "axes": list(layer_axes),
-            "positions": [str(p) for p in xarr.coords["P"].values]
-            if "P" in xarr.coords
-            else None,
+            "positions": _position_names(nd2_file) if "P" in axes else None,
             "time_coordinates_s": None
             if time_coordinates is None
             else time_coordinates.tolist(),
         }
-        contrast = None if rgb else _contrast_limits(xarr, channel_axis)
+        contrast = None if rgb else _contrast_limits(data, axes, channel_axis)
 
     add_kwargs: dict[str, Any] = {
         "metadata": metadata,
@@ -124,7 +122,7 @@ def _read_single_file(path, *, multiple_files):
         if colormaps is not None:
             add_kwargs["colormap"] = colormaps
 
-    return (xarr.data, add_kwargs, "image")
+    return (data, add_kwargs, "image")
 
 
 def show_position(viewer) -> None:
@@ -170,16 +168,19 @@ def show_position(viewer) -> None:
     update()
 
 
-def _contrast_limits(xarr, channel_axis) -> list[tuple[float, float]]:
+def _contrast_limits(data, axes, channel_axis) -> list[tuple[float, float]]:
     """Per channel, ``CONTRAST_PERCENTILES`` of up to nine sampled frames."""
-    picks = {}
-    for axis in xarr.dims:
-        if axis in ("Y", "X", "C", "S"):
+    sample = data
+    for k, axis in enumerate(axes):  # one axis at a time: dask indexes one list
+        n = data.shape[k]
+        if axis in ("Y", "X"):
+            pick = slice(None, None, SAMPLE_STEP)
+        elif axis in ("C", "S"):
             continue
-        n = xarr.sizes[axis]
-        picks[axis] = sorted({0, n // 2, n - 1}) if axis in ("T", "P") else [n // 2]
-    every = slice(None, None, SAMPLE_STEP)
-    sample = np.asarray(xarr.isel({**picks, "Y": every, "X": every}).compute())
+        else:
+            pick = sorted({0, n // 2, n - 1}) if axis in ("T", "P") else [n // 2]
+        sample = sample[(slice(None),) * k + (pick,)]
+    sample = np.asarray(sample.compute())
     if channel_axis is None:
         channels = [sample]
     else:
@@ -189,6 +190,16 @@ def _contrast_limits(xarr, channel_axis) -> list[tuple[float, float]]:
         lo, hi = (float(v) for v in np.percentile(pixels, CONTRAST_PERCENTILES))
         limits.append((lo, hi if hi > lo else lo + 1))
     return limits
+
+
+def _position_names(nd2_file):
+    """Each position's name, or ``XYPos:<index>`` for one without, as nd2 names
+    them."""
+    for loop in nd2_file.experiment:
+        if loop.type == "XYPosLoop":
+            points = loop.parameters.points
+            return [point.name or f"XYPos:{i}" for i, point in enumerate(points)]
+    return ["XYPos:0"]
 
 
 def _coerce_paths(path):
