@@ -82,7 +82,9 @@ def _read_single_file(path, *, multiple_files):
         channel_names = _channel_names(
             channel_metadata, nd2_file.sizes.get("C", 1), path, multiple_files
         )
-        time_coordinates = _time_coordinates_s(nd2_file)
+        events = _events(nd2_file)
+        time_coordinates = _time_coordinates_s(nd2_file, events)
+        frame_times = _frame_times_s(nd2_file, events)
         calibration = _calibration_um(nd2_file)
         scale = _axis_scale(layer_axes, calibration, time_coordinates)
         translate = _axis_translate(layer_axes, time_coordinates)
@@ -95,6 +97,13 @@ def _read_single_file(path, *, multiple_files):
             "time_coordinates_s": None
             if time_coordinates is None
             else time_coordinates.tolist(),
+            # each (time point, position) frame's own time: positions are imaged
+            # one after another, so position 34's frame comes a minute after 0's
+            "frame_times_s": None
+            if frame_times is None
+            else [
+                [None if np.isnan(v) else float(v) for v in row] for row in frame_times
+            ],
         }
         contrast = None if rgb else _contrast_limits(data, axes, channel_axis)
 
@@ -153,12 +162,8 @@ def show_position(viewer) -> None:
         if "P" in step and positions and step["P"] < len(positions):
             parts.append(positions[step["P"]])
         if "T" in step:
-            times = where["time_coordinates_s"]
-            minutes = (
-                f", {times[step['T']] / 60:.1f} min"
-                if times and step["T"] < len(times)
-                else ""
-            )
+            seconds = _time_on_screen(where, step)
+            minutes = "" if seconds is None else f", {seconds / 60:.1f} min"
             parts.append(f"frame {step['T']}{minutes}")
         overlay.text = " · ".join(parts)
         overlay.visible = bool(parts)
@@ -166,6 +171,22 @@ def show_position(viewer) -> None:
     viewer.dims.events.current_step.connect(update)
     viewer.layers.events.inserted.connect(update)
     update()
+
+
+def _time_on_screen(where, step):
+    """The time in seconds of the frame at ``step``: its own (time point, position)
+    time when the file records it, else its time point's."""
+    t = step["T"]
+    frames = where.get("frame_times_s")
+    if frames is not None and t < len(frames):
+        row = frames[t]
+        p = step.get("P", 0)
+        if p < len(row) and row[p] is not None:
+            return row[p]
+    times = where.get("time_coordinates_s")
+    if times and t < len(times):
+        return times[t]
+    return None
 
 
 def _contrast_limits(data, axes, channel_axis) -> list[tuple[float, float]]:
@@ -375,14 +396,43 @@ def _axis_translate(axes, time_coordinates):
     return tuple(float(translate[axis]) for axis in axes)
 
 
-def _time_coordinates_s(nd2_file):
-    """Each time point's time in seconds: the first position's frame at it."""
-    if "T" not in nd2_file.sizes:
+def _events(nd2_file):
+    """The file's per-frame events as lists, or None if it has none or nd2 can't
+    read them."""
+    try:
+        return nd2_file.events(orient="list")
+    except Exception:
         return None
 
-    try:
-        events = nd2_file.events(orient="list")
-    except Exception:
+
+def _frame_times_s(nd2_file, events):
+    """Each (time point, position) frame's time in seconds, as an array (T, P), or
+    None without a T and a P axis. With a Z axis, the first frame of each stack.
+    Frames the events don't time are NaN (None in the layer metadata)."""
+    sizes = nd2_file.sizes
+    if events is None or "T" not in sizes or "P" not in sizes:
+        return None
+    times = events.get("Time [s]")
+    t_indices, p_indices = events.get("T Index"), events.get("P Index")
+    if times is None or t_indices is None or p_indices is None:
+        return None
+    frames = np.full((sizes["T"], sizes["P"]), np.nan)
+    for t, p, time in zip(t_indices, p_indices, times, strict=False):
+        if t is None or p is None or time is None:
+            continue
+        if np.isnan(t) or np.isnan(p) or np.isnan(time):
+            continue
+        t, p = int(t), int(p)
+        if 0 <= t < sizes["T"] and 0 <= p < sizes["P"] and np.isnan(frames[t, p]):
+            frames[t, p] = float(time)
+    if np.isnan(frames).all():
+        return None
+    return frames
+
+
+def _time_coordinates_s(nd2_file, events):
+    """Each time point's time in seconds: the first position's frame at it."""
+    if "T" not in nd2_file.sizes or events is None:
         return None
 
     time_values = events.get("Time [s]")

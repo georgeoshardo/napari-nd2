@@ -2,6 +2,7 @@
 64 x 96 pixels of a mother-machine acquisition (``tests/data/tiny.nd2``)."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import dask.array as da
 import nd2
@@ -13,6 +14,7 @@ from napari_nd2._reader import (
     _axis_scale,
     _axis_units,
     _calibration_um,
+    _frame_times_s,
     _text_overlay,
     _time_coordinates_from_events,
     get_reader,
@@ -79,15 +81,37 @@ def test_layers_are_lazy_named_coloured_and_scaled(tiny):
         assert layer.metadata["napari_nd2"]["positions"] == ["XYPos:0", "XYPos:1"]
 
 
-def test_caption_names_the_position_and_frame(tiny):
+def test_caption_gives_the_time_of_the_frame_on_screen():
+    """Positions are imaged one after another, so each (time point, position) frame
+    has its own time; the caption gives that one, not the time point's."""
+    with nd2.ND2File(TINY) as f:
+        time_s = {
+            (e["T Index"], e["P Index"]): e["Time [s]"]
+            for e in f.events(orient="records")
+        }
     viewer = ViewerModel()
     ((data, kwargs, _),) = read_nd2(TINY)
     viewer.add_image(data, **kwargs)
     show_position(viewer)
     assert viewer.dims.axis_labels == ("T", "P", "Y", "X")
-    viewer.dims.current_step = (1, 1, 0, 0)
-    minutes = tiny["times_s"][1] / 60
-    assert _text_overlay(viewer).text == f"XYPos:1 · frame 1, {minutes:.1f} min"
+    for t, p in [(1, 1), (1, 0), (0, 1)]:
+        viewer.dims.current_step = (t, p, 0, 0)
+        minutes = time_s[t, p] / 60
+        assert _text_overlay(viewer).text == f"XYPos:{p} · frame {t}, {minutes:.1f} min"
+    assert round(time_s[1, 1] / 60, 1) != round(time_s[1, 0] / 60, 1)
+
+
+def test_frame_times_take_each_stack_s_first_frame_and_leave_gaps_empty():
+    file = SimpleNamespace(sizes={"T": 2, "P": 2, "Z": 2, "Y": 4, "X": 4})
+    events = {  # T0 P0 has two Z frames; T1 P1 was never imaged
+        "T Index": [0, 0, 0, 1],
+        "P Index": [0, 0, 1, 0],
+        "Time [s]": [0.5, 0.7, 30.0, 60.0],
+    }
+    times = _frame_times_s(file, events)
+    np.testing.assert_array_equal(times, [[0.5, 30.0], [60.0, np.nan]])
+    no_positions = SimpleNamespace(sizes={"T": 2, "Y": 4, "X": 4})
+    assert _frame_times_s(no_positions, events) is None
 
 
 def test_two_files_are_named_after_their_file():
