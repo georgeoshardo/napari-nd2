@@ -10,5 +10,5 @@ spread across time and positions. A caption in the corner gives the position nam
 the frame and time the sliders are on.
 
 ```
-pip install git+https://github.com/georgeoshardo/napari-nd2
+pip install napari-nd2
 ```
