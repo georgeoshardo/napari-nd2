@@ -1,6 +1,6 @@
 [project]
 name = "napari-nd2"
-version = "0.1.0"
+version = "0.1.1"
 description = "Open Nikon ND2 files in napari, lazily, one layer per channel."
 readme = "README.md"
 license = "BSD-3-Clause"
